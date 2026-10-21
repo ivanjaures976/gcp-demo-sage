@@ -8,6 +8,10 @@ name: terraform
 #
 # Avvio manuale; apply aspetta un'approvazione manuale su una issue GitHub prima di
 # applicare esattamente il piano già revisionato.
+#
+# Le variabili del repository vengono "normalizzate" all'inizio di ogni job: spazi e a capo
+# finali (facili da introdurre incollando il valore su GitHub) vengono rimossi, e da lì in
+# poi si usano le variabili di shell $PROJECT_ID, $REGION, $RESOURCE_PREFIX e $STATE_BUCKET.
 
 on:
   workflow_dispatch: {}
@@ -28,6 +32,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Normalizza variabili
+        env:
+          RAW_PROJECT_ID: ${{ vars.PROJECT_ID }}
+          RAW_REGION: ${{ vars.REGION }}
+          RAW_RESOURCE_PREFIX: ${{ vars.RESOURCE_PREFIX }}
+        run: |
+          PROJECT_ID="$(printf '%s' "$RAW_PROJECT_ID" | tr -d '[:space:]')"
+          REGION="$(printf '%s' "$RAW_REGION" | tr -d '[:space:]')"
+          RESOURCE_PREFIX="$(printf '%s' "$RAW_RESOURCE_PREFIX" | tr -d '[:space:]')"
+          {
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "REGION=$REGION"
+            echo "RESOURCE_PREFIX=$RESOURCE_PREFIX"
+            echo "STATE_BUCKET=${RESOURCE_PREFIX:-$PROJECT_ID}-tfstate"
+          } >> "$GITHUB_ENV"
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -38,11 +58,11 @@ jobs:
 
       - name: Assicura che il bucket dello state esista
         run: |
-          gcloud storage buckets describe "gs://${{ vars.RESOURCE_PREFIX || vars.PROJECT_ID }}-tfstate" \
-            --project "${{ vars.PROJECT_ID }}" >/dev/null 2>&1 || \
-          gcloud storage buckets create "gs://${{ vars.RESOURCE_PREFIX || vars.PROJECT_ID }}-tfstate" \
-            --project "${{ vars.PROJECT_ID }}" \
-            --location "${{ vars.REGION }}" \
+          gcloud storage buckets describe "gs://$STATE_BUCKET" \
+            --project "$PROJECT_ID" >/dev/null 2>&1 || \
+          gcloud storage buckets create "gs://$STATE_BUCKET" \
+            --project "$PROJECT_ID" \
+            --location "$REGION" \
             --uniform-bucket-level-access
 
       - uses: hashicorp/setup-terraform@v3
@@ -50,7 +70,7 @@ jobs:
       - name: Terraform init
         run: |
           terraform init \
-            -backend-config="bucket=${{ vars.RESOURCE_PREFIX || vars.PROJECT_ID }}-tfstate" \
+            -backend-config="bucket=$STATE_BUCKET" \
             -backend-config="prefix=sage"
 
       - name: Terraform validate
@@ -59,9 +79,9 @@ jobs:
       - name: Terraform plan
         run: |
           terraform plan \
-            -var "project_id=${{ vars.PROJECT_ID }}" \
-            -var "region=${{ vars.REGION }}" \
-            -var "resource_prefix=${{ vars.RESOURCE_PREFIX }}" \
+            -var "project_id=$PROJECT_ID" \
+            -var "region=$REGION" \
+            -var "resource_prefix=$RESOURCE_PREFIX" \
             -out=tfplan
 
       - uses: actions/upload-artifact@v4
@@ -92,6 +112,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Normalizza variabili
+        env:
+          RAW_PROJECT_ID: ${{ vars.PROJECT_ID }}
+          RAW_RESOURCE_PREFIX: ${{ vars.RESOURCE_PREFIX }}
+        run: |
+          PROJECT_ID="$(printf '%s' "$RAW_PROJECT_ID" | tr -d '[:space:]')"
+          RESOURCE_PREFIX="$(printf '%s' "$RAW_RESOURCE_PREFIX" | tr -d '[:space:]')"
+          {
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "STATE_BUCKET=${RESOURCE_PREFIX:-$PROJECT_ID}-tfstate"
+          } >> "$GITHUB_ENV"
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
@@ -102,7 +134,7 @@ jobs:
       - name: Terraform init
         run: |
           terraform init \
-            -backend-config="bucket=${{ vars.RESOURCE_PREFIX || vars.PROJECT_ID }}-tfstate" \
+            -backend-config="bucket=$STATE_BUCKET" \
             -backend-config="prefix=sage"
 
       - uses: actions/download-artifact@v4
