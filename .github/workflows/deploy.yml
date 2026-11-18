@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy su Cloud Run
         run: |
-          gcloud run deploy "${{ steps.image.outputs.app }}" \
+          gcloud run deploy "${{ steps.image.outputs.app }}-backend" \
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --image "${{ steps.image.outputs.tag }}"

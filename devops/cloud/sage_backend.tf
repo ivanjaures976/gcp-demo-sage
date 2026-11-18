@@ -57,6 +57,10 @@ resource "google_cloud_run_v2_service" "sage_backend" {
       }
 
       env {
+        name  = "SAGE_INSTRUCTIONS_BUCKET"
+        value = google_storage_bucket.instructions.name
+      }
+      env {
         name  = "SAGE_PROJECT_ID"
         value = var.project_id
       }

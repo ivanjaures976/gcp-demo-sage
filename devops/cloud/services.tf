@@ -8,6 +8,8 @@ locals {
     "serviceusage.googleapis.com",
     "aiplatform.googleapis.com", # Vertex AI (Gemini)
     "storage.googleapis.com",    # Bucket dei documenti
+    "firestore.googleapis.com",
+    "bigquery.googleapis.com",
   ]
 }
 

@@ -1,12 +1,24 @@
-"""Text embedding via Vertex AI.
+"""Text embedding via Vertex AI (Google Gen AI SDK, ADC-based)."""
 
-MOCK: returns a fixed-size zero vector instead of calling Vertex AI. Replace with a real
-call to the Google Gen AI SDK's `embed_content` (see esercizio 09_librerie_python).
-"""
+from functools import lru_cache
+
+from google import genai
+from google.genai import types
 
 from sage.config import get_app_config
 
 
+@lru_cache
+def _get_embedding_client() -> genai.Client:
+    config = get_app_config()
+    return genai.Client(vertexai=True, project=config.project_id, location=config.region)
+
+
 def embed_text(text: str) -> list[float]:
     config = get_app_config()
-    return [0.0] * config.embedding_dimension
+    response = _get_embedding_client().models.embed_content(
+        model=config.embedding_model,
+        contents=text,
+        config=types.EmbedContentConfig(output_dimensionality=config.embedding_dimension),
+    )
+    return list(response.embeddings[0].values)
