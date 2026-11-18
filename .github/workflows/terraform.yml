@@ -6,8 +6,8 @@ name: terraform
 # RESOURCE_PREFIX (variabile del repository, opzionale): se valorizzato il progetto GCP è
 # condiviso e tutte le risorse (incluso il bucket di state) portano questo prefisso.
 #
-# Avvio manuale; apply aspetta un'approvazione manuale su una issue GitHub prima di
-# applicare esattamente il piano già revisionato.
+# Avvio manuale; apply aspetta l'approvazione manuale tramite l'environment "production"
+# (Required reviewers) prima di applicare esattamente il piano già revisionato.
 #
 # Le variabili del repository vengono "normalizzate" all'inizio di ogni job: spazi e a capo
 # finali (facili da introdurre incollando il valore su GitHub) vengono rimossi, e da lì in
@@ -90,22 +90,10 @@ jobs:
           path: devops/cloud/tfplan
           retention-days: 1
 
-  approval:
+  apply:
     needs: plan
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-    steps:
-      - uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ secrets.GITHUB_TOKEN }}
-          approvers: ${{ vars.APPROVERS }}
-          minimum-approvals: 1
-          issue-title: "Approvazione terraform apply — Sage (run ${{ github.run_id }})"
-
-  apply:
-    needs: approval
-    runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -144,4 +132,3 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -auto-approve tfplan
-
