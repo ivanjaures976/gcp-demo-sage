@@ -16,6 +16,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Normalizza variabili
+        env:
+          RAW_PROJECT_ID: ${{ vars.PROJECT_ID }}
+          RAW_REGION: ${{ vars.REGION }}
+          RAW_RESOURCE_PREFIX: ${{ vars.RESOURCE_PREFIX }}
+        run: |
+          PROJECT_ID="$(printf '%s' "$RAW_PROJECT_ID" | tr -d '[:space:]')"
+          REGION="$(printf '%s' "$RAW_REGION" | tr -d '[:space:]')"
+          RESOURCE_PREFIX="$(printf '%s' "$RAW_RESOURCE_PREFIX" | tr -d '[:space:]')"
+          {
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "REGION=$REGION"
+            echo "RESOURCE_PREFIX=$RESOURCE_PREFIX"
+          } >> "$GITHUB_ENV"
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
@@ -24,7 +39,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configura Docker per Artifact Registry
-        run: gcloud auth configure-docker "${{ vars.REGION }}-docker.pkg.dev" --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Calcola il tag immagine
         id: image
@@ -32,9 +47,8 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           # Stessa regola di devops/cloud/locals.tf: "sage", oppure "<prefisso>-sage" in un
           # progetto condiviso. Vale sia per il repository Artifact Registry sia per Cloud Run.
-          PREFIX="${{ vars.RESOURCE_PREFIX }}"
-          APP="${PREFIX:+${PREFIX}-}sage"
-          IMAGE="${{ vars.REGION }}-docker.pkg.dev/${{ vars.PROJECT_ID }}/${APP}/${APP}:${SHORT_SHA}"
+          APP="${RESOURCE_PREFIX:+${RESOURCE_PREFIX}-}sage"
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${APP}/${APP}:${SHORT_SHA}"
           echo "app=$APP" >> "$GITHUB_OUTPUT"
           echo "tag=$IMAGE" >> "$GITHUB_OUTPUT"
 
@@ -47,7 +61,7 @@ jobs:
       - name: Deploy su Cloud Run
         run: |
           gcloud run deploy "${{ steps.image.outputs.app }}" \
-            --project "${{ vars.PROJECT_ID }}" \
-            --region "${{ vars.REGION }}" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
             --image "${{ steps.image.outputs.tag }}"
 
